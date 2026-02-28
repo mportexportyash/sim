@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Accident Alert | Emergency Dashboard</title>
+
+    <style>
+        :root {
+            --danger: #ff4757;
+            --dark: #1e272e;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--dark);
+            color: white;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h2 {
+            color: var(--danger);
+        }
+
+        /* Main */
+        .main {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+        }
+
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 6px solid var(--danger);
+        }
+
+        .val {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .btn {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .btn-alert {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-stop {
+            background: gray;
+            color: white;
+        }
+
+        .emergency-bg {
+            background: #ffeaea !important;
+            border: 2px solid red;
+        }
+
+        .flashing {
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            50% {opacity: 0.3;}
+        }
+
+        iframe {
+            width: 100%;
+            height: 200px;
+            border-radius: 10px;
+            border: none;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2>RESCUE OPS</h2>
+    <p>Status: <span id="sys-status" style="color:green">● STANDBY</span></p>
+
+    <button class="btn btn-alert" onclick="triggerAccident()">🚨 TRIGGER</button>
+    <button class="btn btn-stop" onclick="stopSiren()">STOP</button>
+
+    <div style="margin-top:auto;font-size:12px;">
+        Device: ESP32<br>
+        Location: Pune
+    </div>
+</div>
+
+<div class="main">
+
+    <div class="header" id="statusHeader">
+        <h2 id="alertTitle">Safety Monitoring System</h2>
+        <div id="liveTime"></div>
+    </div>
+
+    <div class="grid">
+
+        <!-- LEFT -->
+        <div class="card">
+            <h3>Hardware</h3>
+            <p>MPU6050 + DHT11 + GPS</p>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="card" id="dataCard">
+            <h3>Live Data</h3>
+
+            <div class="sensor-row">
+                <span>Impact</span>
+                <span class="val" id="accVal">0.1 G</span>
+            </div>
+
+            <div class="sensor-row">
+                <span>Temperature</span>
+                <span class="val" id="tempVal">30 °C</span>
+            </div>
+
+            <div class="sensor-row">
+                <span>Humidity</span>
+                <span class="val" id="humVal">60 %</span>
+            </div>
+
+            <!-- GPS -->
+            <div class="sensor-row">
+                <span>Location</span>
+                <span class="val" id="gpsVal">Loading...</span>
+            </div>
+
+            <!-- MAP -->
+            <iframe id="mapFrame"
+                src="https://maps.google.com/maps?q=18.5204,73.8567&z=15&output=embed">
+            </iframe>
+
+        </div>
+
+    </div>
+</div>
+
+<audio id="sirenAudio" loop>
+    <source src="https://www.soundjay.com/buttons/sounds/beep-01a.mp3">
+</audio>
+
+<script>
+let siren = document.getElementById("sirenAudio");
+let accidentTriggered = false;
+let currentMapLink = "";
+
+// 🔁 SENSOR SIMULATION
+setInterval(updateSensorData, 2000);
+setInterval(fetchGPS, 3000);
+
+function updateSensorData() {
+    let impact = (Math.random() * 1.5).toFixed(2);
+    let temp = Math.floor(25 + Math.random() * 10);
+    let hum = Math.floor(40 + Math.random() * 30);
+
+    if (Math.random() > 0.9) impact = (3 + Math.random() * 2).toFixed(2);
+
+    document.getElementById("accVal").innerText = impact + " G";
+    document.getElementById("tempVal").innerText = temp + " °C";
+    document.getElementById("humVal").innerText = hum + " %";
+
+    if (impact > 3 && !accidentTriggered) {
+        triggerAccidentAuto(impact, temp, hum);
+    }
+}
+
+// 🌐 FETCH GPS FROM ESP32
+async function fetchGPS() {
+    try {
+        let res = await fetch("http://192.168.1.100/data"); // 🔴 CHANGE IP
+        let data = await res.json();
+
+        let lat = data.lat;
+        let lng = data.lng;
+
+        document.getElementById("gpsVal").innerText =
+            lat.toFixed(5) + ", " + lng.toFixed(5);
+
+        document.getElementById("mapFrame").src =
+            `https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`;
+
+        currentMapLink = `https://www.google.com/maps?q=${lat},${lng}`;
+
+    } catch (e) {
+        console.log("GPS Error", e);
+    }
+}
+
+// 🚨 AUTO ALERT
+function triggerAccidentAuto(impact, temp, hum) {
+    accidentTriggered = true;
+
+    siren.play();
+
+    document.getElementById("alertTitle").innerText = "🚨 ACCIDENT!";
+    document.getElementById("sys-status").innerText = "EMERGENCY";
+    document.getElementById("sys-status").style.color = "red";
+
+    let phone = "919403881406";
+
+    let msg = encodeURIComponent(
+`🚨 Accident Alert
+Impact: ${impact}G
+Temp: ${temp}°C
+Humidity: ${hum}%
+Map: ${currentMapLink}`
+    );
+
+    window.open(`https://wa.me/${phone}?text=${msg}`);
+}
+
+// 🛑 STOP
+function stopSiren() {
+    siren.pause();
+    accidentTriggered = false;
+
+    document.getElementById("alertTitle").innerText = "Safety Monitoring System";
+    document.getElementById("sys-status").innerText = "STANDBY";
+    document.getElementById("sys-status").style.color = "green";
+}
+</script>
+
+</body>
+</html>
